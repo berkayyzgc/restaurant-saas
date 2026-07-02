@@ -14,5 +14,14 @@ export class UsersService {
         password: createUserDto.password,
       },
     });
+      }
+
+
+  findByEmail(email: string) {
+    return this.prisma.user.findUnique({
+      where: {
+        email: email,
+      },
+    });
   }
 }

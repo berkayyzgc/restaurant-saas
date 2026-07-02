@@ -7,33 +7,38 @@ import { PrismaService } from '../prisma/prisma.service';
 export class RestaurantsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createRestaurantDto: CreateRestaurantDto) {
-    return this.prisma.restaurant.create({
-      data: {
-        name: createRestaurantDto.name,
-        city: createRestaurantDto.city,
-        address: createRestaurantDto.address,
-        phone: createRestaurantDto.phone,
-        description: createRestaurantDto.description,
-        user: {
-          connect: {
-            id: 1,
-          },
+  create(createRestaurantDto: CreateRestaurantDto, userId: number) {
+  return this.prisma.restaurant.create({
+    data: {
+      name: createRestaurantDto.name,
+      city: createRestaurantDto.city,
+      address: createRestaurantDto.address,
+      phone: createRestaurantDto.phone,
+      description: createRestaurantDto.description,
+      user: {
+        connect: {
+          id: userId,
         },
       },
-    });
-  }
+    },
+  });
+}
 
-  findAll() {
-    return this.prisma.restaurant.findMany();
-  }
+  findAll(userId: number) {
+  return this.prisma.restaurant.findMany({
+    where: {
+      userId: userId,
+    },
+  });
+}
 
-  async findOne(id: number) {
-    const restaurant = await this.prisma.restaurant.findUnique({
-      where: {
-        id: id,
-      },
-    });
+  async findOne(id: number, userId: number) {
+  const restaurant = await this.prisma.restaurant.findFirst({
+    where: {
+      id: id,
+      userId: userId,
+    },
+  });
 
     if (!restaurant) {
       throw new NotFoundException('Restaurant not found');
@@ -42,20 +47,45 @@ export class RestaurantsService {
     return restaurant;
   }
 
-  update(id: number, updateRestaurantDto: UpdateRestaurantDto) {
-    return this.prisma.restaurant.update({
-      where: {
-        id: id,
-      },
-      data: updateRestaurantDto,
-    });
+  async update(
+  id: number,
+  updateRestaurantDto: UpdateRestaurantDto,
+  userId: number,
+) {
+  const restaurant = await this.prisma.restaurant.findFirst({
+    where: {
+      id,
+      userId,
+    },
+  });
+
+  if (!restaurant) {
+    throw new NotFoundException('Restaurant not found');
   }
 
-  remove(id: number) {
-    return this.prisma.restaurant.delete({
-      where: {
-        id: id,
-      },
-    });
+  return this.prisma.restaurant.update({
+    where: {
+      id,
+    },
+    data: updateRestaurantDto,
+  });
+}
+  async remove(id: number, userId: number) {
+  const restaurant = await this.prisma.restaurant.findFirst({
+    where: {
+      id,
+      userId,
+    },
+  });
+
+  if (!restaurant) {
+    throw new NotFoundException('Restaurant not found');
   }
+
+  return this.prisma.restaurant.delete({
+    where: {
+      id,
+    },
+  });
+}
 }
