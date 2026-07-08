@@ -16,6 +16,10 @@ export class TablesController {
   findAll() {
     return this.tablesService.findAll();
   }
+  @Get('qr/:token')
+findByQrToken(@Param('token') token: string) {
+  return this.tablesService.findByQrToken(token);
+}
 
   @Get(':id')
   findOne(@Param('id') id: string) {

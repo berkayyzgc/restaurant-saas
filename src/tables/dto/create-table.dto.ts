@@ -1,9 +1,16 @@
-import { IsNumber, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsInt, IsString } from 'class-validator';
 
 export class CreateTableDto {
+  @ApiProperty({
+    example: 'Masa 1',
+  })
   @IsString()
   name!: string;
 
-  @IsNumber()
+  @ApiProperty({
+    example: 4,
+  })
+  @IsInt()
   restaurantId!: number;
 }
