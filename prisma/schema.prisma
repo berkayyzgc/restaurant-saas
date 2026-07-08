@@ -8,61 +8,60 @@ datasource db {
 }
 
 model Restaurant {
-  id          Int     @id @default(autoincrement())
-  name        String
-  city        String
-  address     String
-  phone       String
-  description String?
-
-  userId Int
-  user   User @relation(fields: [userId], references: [id])
-
+  id             Int            @id @default(autoincrement())
+  name           String
+  city           String
+  createdAt      DateTime       @default(now())
+  address        String
+  description    String?
+  phone          String
+  updatedAt      DateTime       @updatedAt
+  userId         Int
   menuCategories MenuCategory[]
-  menuItems       MenuItem[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  menuItems      MenuItem[]
+  tables Table[]
+  user           User           @relation(fields: [userId], references: [id])
 }
 
 model User {
-  id       Int    @id @default(autoincrement())
-  name     String
-  email    String @unique
-  password String
-
+  id          Int          @id @default(autoincrement())
+  name        String
+  email       String       @unique
+  password    String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   restaurants Restaurant[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model MenuCategory {
-  id   Int    @id @default(autoincrement())
-  name String
-
+  id           Int        @id @default(autoincrement())
+  name         String
   restaurantId Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
-
-  menuItems MenuItem[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  menuItems    MenuItem[]
 }
 
 model MenuItem {
-  id          Int     @id @default(autoincrement())
-  name        String
-  price       Float
-  description String?
-  isAvailable Boolean @default(true)
-
-  categoryId Int
-  category   MenuCategory @relation(fields: [categoryId], references: [id])
-
+  id           Int          @id @default(autoincrement())
+  name         String
+  price        Float
+  description  String?
+  isAvailable  Boolean      @default(true)
+  categoryId   Int
+  restaurantId Int
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  category     MenuCategory @relation(fields: [categoryId], references: [id])
+  restaurant   Restaurant   @relation(fields: [restaurantId], references: [id])
+}
+model Table {
+  id           Int        @id @default(autoincrement())
+  name         String
+qrToken String? @unique
   restaurantId Int
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
