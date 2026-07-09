@@ -42,7 +42,6 @@ export class TablesService {
 
 
 async findByQrToken(qrToken: string) {
-  console.log('GELEN TOKEN:', qrToken);
 
   const table = await this.prisma.table.findUnique({
     where: { qrToken },
@@ -50,8 +49,6 @@ async findByQrToken(qrToken: string) {
       restaurant: true,
     },
   });
-
-  console.log('BULUNAN MASA:', table);
 
   return table;
 }
