@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { TablesService } from './tables.service';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
@@ -16,10 +24,16 @@ export class TablesController {
   findAll() {
     return this.tablesService.findAll();
   }
+
   @Get('qr/:token')
-findByQrToken(@Param('token') token: string) {
-  return this.tablesService.findByQrToken(token);
-}
+  findByQrToken(@Param('token') token: string) {
+    return this.tablesService.findByQrToken(token);
+  }
+
+  @Patch(':id/close-session')
+  closeSession(@Param('id') id: string) {
+    return this.tablesService.closeSession(+id);
+  }
 
   @Get(':id')
   findOne(@Param('id') id: string) {

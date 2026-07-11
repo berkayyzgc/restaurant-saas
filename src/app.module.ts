@@ -8,10 +8,11 @@ import { AuthModule } from './auth/auth.module';
 import { MenuModule } from './menu/menu.module';
 import { TablesModule } from './tables/tables.module';
 import { OrdersModule } from './orders/orders.module';
+import { KitchenGateway } from './kitchen/kitchen.gateway';
 
 @Module({
   imports: [RestaurantsModule, PrismaModule, UsersModule, AuthModule, MenuModule, TablesModule, OrdersModule],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, KitchenGateway],
 })
 export class AppModule {}
