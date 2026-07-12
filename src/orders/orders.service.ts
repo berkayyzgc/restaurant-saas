@@ -205,26 +205,30 @@ return createdOrder;
     }
   }
 
-  return this.prisma.order.update({
-    where: { id },
-    data: {
-      status: updateOrderDto.status,
-      note: updateOrderDto.note,
-    },
-    include: {
-      tableSession: {
-        include: {
-          table: true,
-          restaurant: true,
-        },
-      },
-      items: {
-        include: {
-          menuItem: true,
-        },
+  const updatedOrder = await this.prisma.order.update({
+  where: { id },
+  data: {
+    status: updateOrderDto.status,
+    note: updateOrderDto.note,
+  },
+  include: {
+    tableSession: {
+      include: {
+        table: true,
+        restaurant: true,
       },
     },
-  });
+    items: {
+      include: {
+        menuItem: true,
+      },
+    },
+  },
+});
+
+this.kitchenGateway.sendOrderUpdated(updatedOrder);
+
+return updatedOrder;
 }
   async remove(id: number) {
     await this.findOne(id);

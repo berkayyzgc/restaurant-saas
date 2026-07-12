@@ -13,12 +13,21 @@ export class KitchenGateway {
   @WebSocketServer()
   server!: Server;
 
-   sendNewOrder(order: any) {
+  sendNewOrder(order: any) {
     console.log(
       '📡 new-order yayını yapılıyor. Bağlı istemci sayısı:',
       this.server.sockets.sockets.size,
     );
 
     this.server.emit('new-order', order);
+  }
+
+  sendOrderUpdated(order: any) {
+    console.log(
+      '📡 order-updated yayını yapılıyor. Bağlı istemci sayısı:',
+      this.server.sockets.sockets.size,
+    );
+
+    this.server.emit('order-updated', order);
   }
 }
