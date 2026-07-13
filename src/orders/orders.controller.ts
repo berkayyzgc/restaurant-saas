@@ -25,6 +25,11 @@ findKitchenOrders() {
   return this.ordersService.findKitchenOrders();
 }
 
+@Get('table/:tableId/active')
+findActiveOrderByTable(@Param('tableId') tableId: string) {
+  return this.ordersService.findActiveOrderByTable(+tableId);
+}
+
   @Get()
   findAll() {
     return this.ordersService.findAll();

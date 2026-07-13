@@ -237,6 +237,51 @@ return updatedOrder;
       where: { id },
     });
   }
+
+  async findActiveOrderByTable(tableId: number) {
+  const table = await this.prisma.table.findUnique({
+    where: {
+      id: tableId,
+    },
+  });
+
+  if (!table) {
+    throw new NotFoundException('Masa bulunamadı');
+  }
+
+  return this.prisma.order.findFirst({
+    where: {
+      tableSession: {
+        tableId,
+        status: 'OPEN',
+      },
+      status: {
+        in: [
+          OrderStatus.PENDING,
+          OrderStatus.ACCEPTED,
+          OrderStatus.PREPARING,
+          OrderStatus.READY,
+        ],
+      },
+    },
+    include: {
+      tableSession: {
+        include: {
+          table: true,
+          restaurant: true,
+        },
+      },
+      items: {
+        include: {
+          menuItem: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
   findKitchenOrders() {
   return this.prisma.order.findMany({
     where: {
@@ -279,3 +324,4 @@ return updatedOrder;
   });
 }
 }
+
