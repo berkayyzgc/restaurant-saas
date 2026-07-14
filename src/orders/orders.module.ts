@@ -8,5 +8,6 @@ import { KitchenGateway } from '../kitchen/kitchen.gateway';
   imports: [PrismaModule],
   controllers: [OrdersController],
   providers: [OrdersService, KitchenGateway],
+  exports: [KitchenGateway],
 })
 export class OrdersModule {}

@@ -9,9 +9,11 @@ import { MenuModule } from './menu/menu.module';
 import { TablesModule } from './tables/tables.module';
 import { OrdersModule } from './orders/orders.module';
 import { KitchenGateway } from './kitchen/kitchen.gateway';
+import { PaymentModule } from './payment/payment.module';
+import { ServiceRequestModule } from './service-request/service-request.module';
 
 @Module({
-  imports: [RestaurantsModule, PrismaModule, UsersModule, AuthModule, MenuModule, TablesModule, OrdersModule],
+  imports: [RestaurantsModule, PrismaModule, UsersModule, AuthModule, MenuModule, TablesModule, OrdersModule, PaymentModule, ServiceRequestModule],
   controllers: [AppController],
   providers: [AppService, KitchenGateway],
 })

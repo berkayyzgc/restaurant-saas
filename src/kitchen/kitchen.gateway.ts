@@ -22,6 +22,32 @@ export class KitchenGateway {
     this.server.emit('new-order', order);
   }
 
+  sendServiceRequestCreated(serviceRequest: unknown) {
+  console.log(
+    '📡 service-request-created yayını yapılıyor.',
+  );
+
+  this.server.emit(
+    'service-request-created',
+    serviceRequest,
+  );
+}
+
+sendServiceRequestUpdated(serviceRequest: unknown) {
+  console.log(
+    '📡 service-request-updated yayını yapılıyor.',
+  );
+
+  this.server.emit(
+    'service-request-updated',
+    serviceRequest,
+  );
+}
+
+  sendPaymentCompleted(payment: unknown) {
+  this.server.emit('payment-completed', payment);
+}
+
   sendOrderUpdated(order: any) {
     console.log(
       '📡 order-updated yayını yapılıyor. Bağlı istemci sayısı:',

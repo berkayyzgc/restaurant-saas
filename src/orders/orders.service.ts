@@ -12,9 +12,9 @@ import { UpdateOrderDto } from './dto/update-order.dto';
 @Injectable()
 export class OrdersService {
   constructor(
-  private readonly prisma: PrismaService,
-  private readonly kitchenGateway: KitchenGateway,
-) {}
+    private readonly prisma: PrismaService,
+    private readonly kitchenGateway: KitchenGateway,
+  ) {}
 
   async create(createOrderDto: CreateOrderDto) {
     const { tableId, items, note } = createOrderDto;
@@ -27,7 +27,9 @@ export class OrdersService {
       throw new NotFoundException('Masa bulunamadı');
     }
 
-    const menuItemIds = [...new Set(items.map((item) => item.menuItemId))];
+    const menuItemIds = [
+      ...new Set(items.map((item) => item.menuItemId)),
+    ];
 
     const menuItems = await this.prisma.menuItem.findMany({
       where: {
@@ -44,13 +46,18 @@ export class OrdersService {
     }
 
     const menuItemMap = new Map(
-      menuItems.map((menuItem) => [menuItem.id, menuItem]),
+      menuItems.map((menuItem) => [
+        menuItem.id,
+        menuItem,
+      ]),
     );
 
     let totalPrice = new Prisma.Decimal(0);
 
     const orderItems = items.map((requestedItem) => {
-      const menuItem = menuItemMap.get(requestedItem.menuItemId);
+      const menuItem = menuItemMap.get(
+        requestedItem.menuItemId,
+      );
 
       if (!menuItem) {
         throw new NotFoundException(
@@ -71,7 +78,9 @@ export class OrdersService {
       }
 
       const unitPrice = new Prisma.Decimal(menuItem.price);
-      const itemTotal = unitPrice.mul(requestedItem.quantity);
+      const itemTotal = unitPrice.mul(
+        requestedItem.quantity,
+      );
 
       totalPrice = totalPrice.plus(itemTotal);
 
@@ -84,55 +93,59 @@ export class OrdersService {
       };
     });
 
-    const createdOrder = await this.prisma.$transaction(async (transaction) => {
-      let tableSession = await transaction.tableSession.findFirst({
-        where: {
-          tableId,
-          status: 'OPEN',
-        },
-        orderBy: {
-          openedAt: 'desc',
-        },
-      });
+    const createdOrder = await this.prisma.$transaction(
+      async (transaction) => {
+        let tableSession =
+          await transaction.tableSession.findFirst({
+            where: {
+              tableId,
+              status: 'OPEN',
+            },
+            orderBy: {
+              openedAt: 'desc',
+            },
+          });
 
-      if (!tableSession) {
-        tableSession = await transaction.tableSession.create({
+        if (!tableSession) {
+          tableSession =
+            await transaction.tableSession.create({
+              data: {
+                tableId,
+                restaurantId: table.restaurantId,
+              },
+            });
+        }
+
+        return transaction.order.create({
           data: {
-            tableId,
-            restaurantId: table.restaurantId,
+            tableSessionId: tableSession.id,
+            note,
+            totalPrice,
+            items: {
+              create: orderItems,
+            },
+          },
+          include: {
+            tableSession: {
+              include: {
+                table: true,
+                restaurant: true,
+              },
+            },
+            items: {
+              include: {
+                menuItem: true,
+              },
+            },
           },
         });
-      }
+      },
+    );
 
-      return transaction.order.create({
-        data: {
-          tableSessionId: tableSession.id,
-          note,
-          totalPrice,
-          items: {
-            create: orderItems,
-          },
-        },
-        include: {
-          tableSession: {
-            include: {
-              table: true,
-              restaurant: true,
-            },
-          },
-          items: {
-            include: {
-              menuItem: true,
-            },
-          },
-        },
-      });
-    });
     this.kitchenGateway.sendNewOrder(createdOrder);
 
-return createdOrder;
+    return createdOrder;
   }
-  
 
   findAll() {
     return this.prisma.order.findMany({
@@ -180,56 +193,107 @@ return createdOrder;
     return order;
   }
 
-  async update(id: number, updateOrderDto: UpdateOrderDto) {
-  const existingOrder = await this.findOne(id);
-
-  if (
-    updateOrderDto.status &&
-    updateOrderDto.status !== existingOrder.status
+  async update(
+    id: number,
+    updateOrderDto: UpdateOrderDto,
   ) {
-    const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
-      PENDING: [OrderStatus.ACCEPTED, OrderStatus.CANCELLED],
-      ACCEPTED: [OrderStatus.PREPARING, OrderStatus.CANCELLED],
-      PREPARING: [OrderStatus.READY, OrderStatus.CANCELLED],
-      READY: [OrderStatus.SERVED],
-      SERVED: [],
-      CANCELLED: [],
-    };
+    const existingOrder = await this.findOne(id);
 
-    const allowedStatuses = allowedTransitions[existingOrder.status];
+    if (
+      updateOrderDto.status &&
+      updateOrderDto.status !== existingOrder.status
+    ) {
+      const allowedTransitions: Record<
+        OrderStatus,
+        OrderStatus[]
+      > = {
+        PENDING: [
+          OrderStatus.ACCEPTED,
+          OrderStatus.CANCELLED,
+        ],
+        ACCEPTED: [
+          OrderStatus.PREPARING,
+          OrderStatus.CANCELLED,
+        ],
+        PREPARING: [
+          OrderStatus.READY,
+          OrderStatus.CANCELLED,
+        ],
+        READY: [OrderStatus.SERVED],
+        SERVED: [],
+        CANCELLED: [],
+      };
 
-    if (!allowedStatuses.includes(updateOrderDto.status)) {
-      throw new BadRequestException(
-        `${existingOrder.status} durumundan ${updateOrderDto.status} durumuna geçilemez`,
-      );
+      const allowedStatuses =
+        allowedTransitions[existingOrder.status];
+
+      if (!allowedStatuses.includes(updateOrderDto.status)) {
+        throw new BadRequestException(
+          `${existingOrder.status} durumundan ${updateOrderDto.status} durumuna geçilemez`,
+        );
+      }
     }
+
+    const updateData: Prisma.OrderUpdateInput = {};
+
+    if (updateOrderDto.note !== undefined) {
+      updateData.note = updateOrderDto.note;
+    }
+
+    if (
+      updateOrderDto.status &&
+      updateOrderDto.status !== existingOrder.status
+    ) {
+      const now = new Date();
+
+      updateData.status = updateOrderDto.status;
+
+      switch (updateOrderDto.status) {
+        case OrderStatus.ACCEPTED:
+          updateData.acceptedAt = now;
+          break;
+
+        case OrderStatus.PREPARING:
+          updateData.preparingAt = now;
+          break;
+
+        case OrderStatus.READY:
+          updateData.readyAt = now;
+          break;
+
+        case OrderStatus.SERVED:
+          updateData.servedAt = now;
+          break;
+
+        case OrderStatus.CANCELLED:
+          updateData.cancelledAt = now;
+          break;
+      }
+    }
+
+    const updatedOrder = await this.prisma.order.update({
+      where: { id },
+      data: updateData,
+      include: {
+        tableSession: {
+          include: {
+            table: true,
+            restaurant: true,
+          },
+        },
+        items: {
+          include: {
+            menuItem: true,
+          },
+        },
+      },
+    });
+
+    this.kitchenGateway.sendOrderUpdated(updatedOrder);
+
+    return updatedOrder;
   }
 
-  const updatedOrder = await this.prisma.order.update({
-  where: { id },
-  data: {
-    status: updateOrderDto.status,
-    note: updateOrderDto.note,
-  },
-  include: {
-    tableSession: {
-      include: {
-        table: true,
-        restaurant: true,
-      },
-    },
-    items: {
-      include: {
-        menuItem: true,
-      },
-    },
-  },
-});
-
-this.kitchenGateway.sendOrderUpdated(updatedOrder);
-
-return updatedOrder;
-}
   async remove(id: number) {
     await this.findOne(id);
 
@@ -239,89 +303,94 @@ return updatedOrder;
   }
 
   async findActiveOrderByTable(tableId: number) {
-  const table = await this.prisma.table.findUnique({
-    where: {
-      id: tableId,
-    },
-  });
-
-  if (!table) {
-    throw new NotFoundException('Masa bulunamadı');
-  }
-
-  return this.prisma.order.findFirst({
-    where: {
-      tableSession: {
-        tableId,
-        status: 'OPEN',
+    const table = await this.prisma.table.findUnique({
+      where: {
+        id: tableId,
       },
-      status: {
-        in: [
-          OrderStatus.PENDING,
-          OrderStatus.ACCEPTED,
-          OrderStatus.PREPARING,
-          OrderStatus.READY,
-        ],
-      },
-    },
-    include: {
-      tableSession: {
-        include: {
-          table: true,
-          restaurant: true,
+    });
+
+    if (!table) {
+      throw new NotFoundException('Masa bulunamadı');
+    }
+
+    return this.prisma.order.findFirst({
+      where: {
+        tableSession: {
+          tableId,
+          status: 'OPEN',
+        },
+        status: {
+          in: [
+            OrderStatus.PENDING,
+            OrderStatus.ACCEPTED,
+            OrderStatus.PREPARING,
+            OrderStatus.READY,
+          ],
         },
       },
-      items: {
-        include: {
-          menuItem: true,
+      include: {
+        tableSession: {
+          include: {
+            table: true,
+            restaurant: true,
+          },
         },
-      },
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-  });
-}
-  findKitchenOrders() {
-  return this.prisma.order.findMany({
-    where: {
-      status: {
-        in: [
-          OrderStatus.PENDING,
-          OrderStatus.ACCEPTED,
-          OrderStatus.PREPARING,
-          OrderStatus.READY,
-        ],
-      },
-    },
-    select: {
-      id: true,
-      status: true,
-      note: true,
-      createdAt: true,
-      tableSession: {
-        select: {
-          table: {
-            select: {
-              id: true,
-              name: true,
-            },
+        items: {
+          include: {
+            menuItem: true,
           },
         },
       },
-      items: {
-        select: {
-          id: true,
-          itemName: true,
-          quantity: true,
-          note: true,
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  findKitchenOrders() {
+    return this.prisma.order.findMany({
+      where: {
+        status: {
+          in: [
+            OrderStatus.PENDING,
+            OrderStatus.ACCEPTED,
+            OrderStatus.PREPARING,
+            OrderStatus.READY,
+          ],
         },
       },
-    },
-    orderBy: {
-      createdAt: 'asc',
-    },
-  });
+      select: {
+        id: true,
+        status: true,
+        note: true,
+        createdAt: true,
+        acceptedAt: true,
+        preparingAt: true,
+        readyAt: true,
+        servedAt: true,
+        cancelledAt: true,
+        tableSession: {
+          select: {
+            table: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        items: {
+          select: {
+            id: true,
+            itemName: true,
+            quantity: true,
+            note: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+  }
 }
-}
-

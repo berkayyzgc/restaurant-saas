@@ -84,6 +84,37 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum OrderPaymentStatus {
+  UNPAID
+  PAID
+  
+}
+
+enum ServiceRequestType {
+  CALL_WAITER
+  REQUEST_BILL
+}
+
+enum ServiceRequestStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+
+enum PaymentMethod {
+  ONLINE
+  CARD
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 model TableSession {
   id           Int                @id @default(autoincrement())
   tableId      Int
@@ -96,16 +127,26 @@ model TableSession {
   table      Table      @relation(fields: [tableId], references: [id])
   restaurant Restaurant @relation(fields: [restaurantId], references: [id])
   orders     Order[]
+  payments   Payment[]
+  serviceRequests ServiceRequest[]
 }
 
 model Order {
-  id             Int         @id @default(autoincrement())
+  id             Int                @id @default(autoincrement())
   tableSessionId Int
-  status         OrderStatus @default(PENDING)
+  status         OrderStatus        @default(PENDING)
+  paymentStatus  OrderPaymentStatus @default(UNPAID)
   note           String?
-  totalPrice     Decimal     @db.Decimal(10, 2)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  totalPrice     Decimal            @db.Decimal(10, 2)
+
+  createdAt   DateTime  @default(now())
+  acceptedAt  DateTime?
+  preparingAt DateTime?
+  readyAt     DateTime?
+  servedAt    DateTime?
+  cancelledAt DateTime?
+  paidAt      DateTime?
+  updatedAt   DateTime  @updatedAt
 
   tableSession TableSession @relation(fields: [tableSessionId], references: [id])
   items        OrderItem[]
@@ -123,4 +164,31 @@ model OrderItem {
 
   order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+}
+
+model Payment {
+  id                Int           @id @default(autoincrement())
+  tableSessionId    Int
+  amount            Decimal       @db.Decimal(10, 2)
+  method            PaymentMethod
+  status            PaymentStatus @default(PENDING)
+  keepSessionOpen   Boolean       @default(true)
+  providerPaymentId String?
+  createdAt         DateTime      @default(now())
+  completedAt       DateTime?
+  updatedAt         DateTime      @updatedAt
+
+  tableSession TableSession @relation(fields: [tableSessionId], references: [id])
+}
+
+model ServiceRequest {
+  id             Int                  @id @default(autoincrement())
+  tableSessionId Int
+  type           ServiceRequestType
+  status         ServiceRequestStatus @default(PENDING)
+  createdAt      DateTime             @default(now())
+  completedAt    DateTime?
+  updatedAt      DateTime             @updatedAt
+
+  tableSession TableSession @relation(fields: [tableSessionId], references: [id], onDelete: Cascade)
 }
