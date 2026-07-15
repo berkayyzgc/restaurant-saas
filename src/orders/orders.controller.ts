@@ -30,6 +30,11 @@ findActiveOrderByTable(@Param('tableId') tableId: string) {
   return this.ordersService.findActiveOrderByTable(+tableId);
 }
 
+@Get('table/:tableId/bill-summary')
+getTableBillSummary(@Param('tableId') tableId: string) {
+  return this.ordersService.getTableBillSummary(+tableId);
+}
+
   @Get()
   findAll() {
     return this.ordersService.findAll();

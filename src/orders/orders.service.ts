@@ -347,6 +347,86 @@ export class OrdersService {
     });
   }
 
+  async getTableBillSummary(tableId: number) {
+  const table = await this.prisma.table.findUnique({
+    where: {
+      id: tableId,
+    },
+  });
+
+  if (!table) {
+    throw new NotFoundException('Masa bulunamadı');
+  }
+
+  const tableSession =
+    await this.prisma.tableSession.findFirst({
+      where: {
+        tableId,
+        status: 'OPEN',
+      },
+      include: {
+        orders: {
+          where: {
+            status: {
+              not: OrderStatus.CANCELLED,
+            },
+          },
+          select: {
+            id: true,
+            totalPrice: true,
+          },
+        },
+        payments: {
+          where: {
+            status: 'COMPLETED',
+          },
+          select: {
+            amount: true,
+          },
+        },
+      },
+      orderBy: {
+        openedAt: 'desc',
+      },
+    });
+
+  if (!tableSession) {
+    return {
+      tableSessionId: null,
+      totalAmount: 0,
+      paidAmount: 0,
+      remainingAmount: 0,
+      orderCount: 0,
+    };
+  }
+
+  const totalAmount = tableSession.orders.reduce(
+    (total, order) => total.plus(order.totalPrice),
+    new Prisma.Decimal(0),
+  );
+
+  const paidAmount = tableSession.payments.reduce(
+    (total, payment) => total.plus(payment.amount),
+    new Prisma.Decimal(0),
+  );
+
+  const calculatedRemainingAmount =
+    totalAmount.minus(paidAmount);
+
+  const remainingAmount =
+    calculatedRemainingAmount.lessThan(0)
+      ? new Prisma.Decimal(0)
+      : calculatedRemainingAmount;
+
+  return {
+    tableSessionId: tableSession.id,
+    totalAmount: totalAmount.toNumber(),
+    paidAmount: paidAmount.toNumber(),
+    remainingAmount: remainingAmount.toNumber(),
+    orderCount: tableSession.orders.length,
+  };
+}
+
   findKitchenOrders() {
     return this.prisma.order.findMany({
       where: {
