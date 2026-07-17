@@ -5,10 +5,25 @@ import { TablesService } from './tables.service';
 describe('TablesController', () => {
   let controller: TablesController;
 
+  const tablesServiceMock = {
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findByQrToken: jest.fn(),
+    closeSession: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    remove: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TablesController],
-      providers: [TablesService],
+      providers: [
+        {
+          provide: TablesService,
+          useValue: tablesServiceMock,
+        },
+      ],
     }).compile();
 
     controller = module.get<TablesController>(TablesController);
