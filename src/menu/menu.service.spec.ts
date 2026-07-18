@@ -1,34 +1,42 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { MenuController } from './menu.controller';
 import { MenuService } from './menu.service';
+import { PrismaService } from '../prisma/prisma.service';
 
-describe('MenuController', () => {
-  let controller: MenuController;
+describe('MenuService', () => {
+  let service: MenuService;
 
-  const menuServiceMock = {
-    createCategory: jest.fn(),
-    findAllCategories: jest.fn(),
-    createItem: jest.fn(),
-    findAllItems: jest.fn(),
-    updateItem: jest.fn(),
-    removeItem: jest.fn(),
+  const prismaMock = {
+    menuCategory: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
+    menuItem: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [MenuController],
       providers: [
+        MenuService,
         {
-          provide: MenuService,
-          useValue: menuServiceMock,
+          provide: PrismaService,
+          useValue: prismaMock,
         },
       ],
     }).compile();
 
-    controller = module.get<MenuController>(MenuController);
+    service = module.get<MenuService>(MenuService);
   });
 
   it('should be defined', () => {
-    expect(controller).toBeDefined();
+    expect(service).toBeDefined();
   });
 });
