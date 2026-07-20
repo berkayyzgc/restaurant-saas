@@ -7,7 +7,7 @@ export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post('chat')
-  chat(@Body() chatDto: ChatDto) {
-    return this.aiService.chat(chatDto.message);
-  }
+chat(@Body() chatDto: ChatDto) {
+  return this.aiService.chat(chatDto.message, chatDto.restaurantId);
+}
 }

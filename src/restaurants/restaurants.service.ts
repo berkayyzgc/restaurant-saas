@@ -1,91 +1,141 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
-import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class RestaurantsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
 
-  create(createRestaurantDto: CreateRestaurantDto, userId: number) {
-  return this.prisma.restaurant.create({
-    data: {
-      name: createRestaurantDto.name,
-      city: createRestaurantDto.city,
-      address: createRestaurantDto.address,
-      phone: createRestaurantDto.phone,
-      description: createRestaurantDto.description,
-      user: {
-        connect: {
-          id: userId,
+  create(
+    createRestaurantDto: CreateRestaurantDto,
+    userId: number,
+  ) {
+    return this.prisma.restaurant.create({
+      data: {
+        name: createRestaurantDto.name,
+        city: createRestaurantDto.city,
+        address: createRestaurantDto.address,
+        phone: createRestaurantDto.phone,
+        description:
+          createRestaurantDto.description,
+        user: {
+          connect: {
+            id: userId,
+          },
         },
       },
-    },
-  });
-}
+    });
+  }
 
   findAll(userId: number) {
-  return this.prisma.restaurant.findMany({
-    where: {
-      userId: userId,
-    },
-  });
-}
+    return this.prisma.restaurant.findMany({
+      where: {
+        userId,
+      },
+    });
+  }
 
-  async findOne(id: number, userId: number) {
-  const restaurant = await this.prisma.restaurant.findFirst({
-    where: {
-      id: id,
-      userId: userId,
-    },
-  });
+  async findOne(
+    id: number,
+    userId: number,
+  ) {
+    const restaurant =
+      await this.prisma.restaurant.findFirst({
+        where: {
+          id,
+          userId,
+        },
+      });
 
     if (!restaurant) {
-      throw new NotFoundException('Restaurant not found');
+      throw new NotFoundException(
+        'Restaurant not found',
+      );
+    }
+
+    return restaurant;
+  }
+
+  async findPublicOne(id: number) {
+    const restaurant =
+      await this.prisma.restaurant.findUnique({
+        where: {
+          id,
+        },
+        select: {
+          id: true,
+          name: true,
+          city: true,
+          address: true,
+          description: true,
+          phone: true,
+        },
+      });
+
+    if (!restaurant) {
+      throw new NotFoundException(
+        'Restaurant not found',
+      );
     }
 
     return restaurant;
   }
 
   async update(
-  id: number,
-  updateRestaurantDto: UpdateRestaurantDto,
-  userId: number,
-) {
-  const restaurant = await this.prisma.restaurant.findFirst({
-    where: {
-      id,
-      userId,
-    },
-  });
+    id: number,
+    updateRestaurantDto: UpdateRestaurantDto,
+    userId: number,
+  ) {
+    const restaurant =
+      await this.prisma.restaurant.findFirst({
+        where: {
+          id,
+          userId,
+        },
+      });
 
-  if (!restaurant) {
-    throw new NotFoundException('Restaurant not found');
+    if (!restaurant) {
+      throw new NotFoundException(
+        'Restaurant not found',
+      );
+    }
+
+    return this.prisma.restaurant.update({
+      where: {
+        id,
+      },
+      data: updateRestaurantDto,
+    });
   }
 
-  return this.prisma.restaurant.update({
-    where: {
-      id,
-    },
-    data: updateRestaurantDto,
-  });
-}
-  async remove(id: number, userId: number) {
-  const restaurant = await this.prisma.restaurant.findFirst({
-    where: {
-      id,
-      userId,
-    },
-  });
+  async remove(
+    id: number,
+    userId: number,
+  ) {
+    const restaurant =
+      await this.prisma.restaurant.findFirst({
+        where: {
+          id,
+          userId,
+        },
+      });
 
-  if (!restaurant) {
-    throw new NotFoundException('Restaurant not found');
+    if (!restaurant) {
+      throw new NotFoundException(
+        'Restaurant not found',
+      );
+    }
+
+    return this.prisma.restaurant.delete({
+      where: {
+        id,
+      },
+    });
   }
-
-  return this.prisma.restaurant.delete({
-    where: {
-      id,
-    },
-  });
-}
 }
