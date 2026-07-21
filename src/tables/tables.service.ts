@@ -1,24 +1,39 @@
 import { randomUUID } from 'crypto';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
 
 @Injectable()
 export class TablesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
 
-  create(createTableDto: CreateTableDto) {
+  create(
+    createTableDto: CreateTableDto,
+    restaurantId: number,
+  ) {
     return this.prisma.table.create({
       data: {
-        ...createTableDto,
+        name: createTableDto.name,
+        restaurantId,
         qrToken: randomUUID(),
       },
     });
   }
 
-  async findAll() {
+  async findAll(
+    restaurantId: number,
+  ) {
     const tables = await this.prisma.table.findMany({
+      where: {
+        restaurantId,
+      },
       orderBy: {
         id: 'asc',
       },
@@ -43,16 +58,26 @@ export class TablesService {
     });
 
     return tables.map((table) => {
-      const activeSession = table.tableSessions[0] ?? null;
-      const orders = activeSession?.orders ?? [];
+      const activeSession =
+        table.tableSessions[0] ?? null;
 
-      const hasReadyOrder = orders.some(
-        (order) => order.status === 'READY',
-      );
+      const orders =
+        activeSession?.orders ?? [];
 
-      const hasActiveOrder = orders.some((order) =>
-        ['PENDING', 'ACCEPTED', 'PREPARING'].includes(order.status),
-      );
+      const hasReadyOrder =
+        orders.some(
+          (order) =>
+            order.status === 'READY',
+        );
+
+      const hasActiveOrder =
+        orders.some((order) =>
+          [
+            'PENDING',
+            'ACCEPTED',
+            'PREPARING',
+          ].includes(order.status),
+        );
 
       let operationalStatus:
         | 'AVAILABLE'
@@ -66,7 +91,8 @@ export class TablesService {
         if (hasReadyOrder) {
           operationalStatus = 'READY';
         } else if (hasActiveOrder) {
-          operationalStatus = 'ACTIVE_ORDER';
+          operationalStatus =
+            'ACTIVE_ORDER';
         }
       }
 
@@ -74,7 +100,8 @@ export class TablesService {
         id: table.id,
         name: table.name,
         qrToken: table.qrToken,
-        restaurantId: table.restaurantId,
+        restaurantId:
+          table.restaurantId,
         createdAt: table.createdAt,
         updatedAt: table.updatedAt,
         operationalStatus,
@@ -83,70 +110,126 @@ export class TablesService {
     });
   }
 
-  findOne(id: number) {
-    return this.prisma.table.findUnique({
-      where: { id },
-    });
+  async findOne(
+    id: number,
+    restaurantId: number,
+  ) {
+    const table =
+      await this.prisma.table.findFirst({
+        where: {
+          id,
+          restaurantId,
+        },
+      });
+
+    if (!table) {
+      throw new NotFoundException(
+        'Masa bulunamadı',
+      );
+    }
+
+    return table;
   }
 
-  update(id: number, updateTableDto: UpdateTableDto) {
+  async update(
+    id: number,
+    updateTableDto: UpdateTableDto,
+    restaurantId: number,
+  ) {
+    await this.findOne(
+      id,
+      restaurantId,
+    );
+
     return this.prisma.table.update({
-      where: { id },
-      data: updateTableDto,
+      where: {
+        id,
+      },
+      data: {
+        name: updateTableDto.name,
+      },
     });
   }
 
-  remove(id: number) {
+  async remove(
+    id: number,
+    restaurantId: number,
+  ) {
+    await this.findOne(
+      id,
+      restaurantId,
+    );
+
     return this.prisma.table.delete({
-      where: { id },
+      where: {
+        id,
+      },
     });
   }
 
-  async findByQrToken(qrToken: string) {
-    const table = await this.prisma.table.findUnique({
-      where: { qrToken },
-      include: {
-        restaurant: {
-          include: {
-            menuCategories: {
-              include: {
-                menuItems: {
-                  where: {
-                    isAvailable: true,
+  async findByQrToken(
+    qrToken: string,
+  ) {
+    const table =
+      await this.prisma.table.findUnique({
+        where: {
+          qrToken,
+        },
+        include: {
+          restaurant: {
+            include: {
+              menuCategories: {
+                include: {
+                  menuItems: {
+                    where: {
+                      isAvailable: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-    });
+      });
 
     if (!table) {
-      throw new NotFoundException('QR koduna ait masa bulunamadı');
+      throw new NotFoundException(
+        'QR koduna ait masa bulunamadı',
+      );
     }
 
     return table;
   }
 
-  async closeSession(tableId: number) {
-    const table = await this.prisma.table.findUnique({
-      where: { id: tableId },
-    });
+  async closeSession(
+    tableId: number,
+    restaurantId: number,
+  ) {
+    const table =
+      await this.prisma.table.findFirst({
+        where: {
+          id: tableId,
+          restaurantId,
+        },
+      });
 
     if (!table) {
-      throw new NotFoundException('Masa bulunamadı');
+      throw new NotFoundException(
+        'Masa bulunamadı',
+      );
     }
 
-    const tableSession = await this.prisma.tableSession.findFirst({
-      where: {
-        tableId,
-        status: 'OPEN',
-      },
-      orderBy: {
-        openedAt: 'desc',
-      },
-    });
+    const tableSession =
+      await this.prisma.tableSession.findFirst({
+        where: {
+          tableId,
+          restaurantId,
+          status: 'OPEN',
+        },
+        orderBy: {
+          openedAt: 'desc',
+        },
+      });
 
     if (!tableSession) {
       throw new NotFoundException(

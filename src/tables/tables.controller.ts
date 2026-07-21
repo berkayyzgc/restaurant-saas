@@ -6,47 +6,110 @@ import {
   Param,
   Patch,
   Post,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
-import { TablesService } from './tables.service';
+import type { Request } from 'express';
+
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
+import { TablesService } from './tables.service';
+
+type AuthenticatedRequest = Request & {
+  user: {
+    sub: number;
+    email: string;
+    restaurantId: number;
+  };
+};
 
 @Controller('tables')
 export class TablesController {
-  constructor(private readonly tablesService: TablesService) {}
+  constructor(
+    private readonly tablesService: TablesService,
+  ) {}
 
   @Post()
-  create(@Body() createTableDto: CreateTableDto) {
-    return this.tablesService.create(createTableDto);
+  @UseGuards(JwtAuthGuard)
+  create(
+    @Body() createTableDto: CreateTableDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.tablesService.create(
+      createTableDto,
+      request.user.restaurantId,
+    );
   }
 
   @Get()
-  findAll() {
-    return this.tablesService.findAll();
+  @UseGuards(JwtAuthGuard)
+  findAll(
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.tablesService.findAll(
+      request.user.restaurantId,
+    );
   }
 
+  /*
+   * Müşteri QR kodunu giriş yapmadan kullanacağı için
+   * bu endpoint açık kalıyor.
+   */
   @Get('qr/:token')
-  findByQrToken(@Param('token') token: string) {
+  findByQrToken(
+    @Param('token') token: string,
+  ) {
     return this.tablesService.findByQrToken(token);
   }
 
   @Patch(':id/close-session')
-  closeSession(@Param('id') id: string) {
-    return this.tablesService.closeSession(+id);
+  @UseGuards(JwtAuthGuard)
+  closeSession(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.tablesService.closeSession(
+      +id,
+      request.user.restaurantId,
+    );
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.tablesService.findOne(+id);
+  @UseGuards(JwtAuthGuard)
+  findOne(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.tablesService.findOne(
+      +id,
+      request.user.restaurantId,
+    );
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateTableDto: UpdateTableDto) {
-    return this.tablesService.update(+id, updateTableDto);
+  @UseGuards(JwtAuthGuard)
+  update(
+    @Param('id') id: string,
+    @Body() updateTableDto: UpdateTableDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.tablesService.update(
+      +id,
+      updateTableDto,
+      request.user.restaurantId,
+    );
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.tablesService.remove(+id);
+  @UseGuards(JwtAuthGuard)
+  remove(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.tablesService.remove(
+      +id,
+      request.user.restaurantId,
+    );
   }
 }

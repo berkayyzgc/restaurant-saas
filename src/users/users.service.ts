@@ -4,7 +4,9 @@ import { CreateUserDto } from './dto/create-user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
 
   create(createUserDto: CreateUserDto) {
     return this.prisma.user.create({
@@ -14,13 +16,19 @@ export class UsersService {
         password: createUserDto.password,
       },
     });
-      }
-
+  }
 
   findByEmail(email: string) {
     return this.prisma.user.findUnique({
       where: {
-        email: email,
+        email,
+      },
+      include: {
+        restaurants: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
       },
     });
   }

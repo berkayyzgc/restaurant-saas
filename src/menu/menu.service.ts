@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMenuCategoryDto } from './dto/create-menu-category.dto';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
@@ -6,57 +11,187 @@ import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 
 @Injectable()
 export class MenuService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
 
-  createCategory(createMenuCategoryDto: CreateMenuCategoryDto) {
+  createCategory(
+    createMenuCategoryDto: CreateMenuCategoryDto,
+    restaurantId: number,
+  ) {
     return this.prisma.menuCategory.create({
-      data: createMenuCategoryDto,
+      data: {
+        name: createMenuCategoryDto.name,
+        restaurantId,
+      },
     });
   }
 
-  findCategoriesByRestaurant(restaurantId: number) {
+  findCategoriesByRestaurant(
+    restaurantId: number,
+  ) {
     return this.prisma.menuCategory.findMany({
-      where: { restaurantId },
-      include: { menuItems: true },
+      where: {
+        restaurantId,
+      },
+      orderBy: {
+        id: 'asc',
+      },
+      include: {
+        menuItems: {
+          orderBy: {
+            id: 'asc',
+          },
+        },
+      },
     });
   }
 
-  createItem(createMenuItemDto: CreateMenuItemDto) {
+  async createItem(
+    createMenuItemDto: CreateMenuItemDto,
+    restaurantId: number,
+  ) {
+    const category =
+      await this.prisma.menuCategory.findFirst({
+        where: {
+          id: createMenuItemDto.categoryId,
+          restaurantId,
+        },
+      });
+
+    if (!category) {
+      throw new BadRequestException(
+        'Seçilen kategori bu restorana ait değil.',
+      );
+    }
+
     return this.prisma.menuItem.create({
-      data: createMenuItemDto,
-    });
-  }
-
-  findItemsByRestaurant(restaurantId: number) {
-    return this.prisma.menuItem.findMany({
-      where: { restaurantId },
+      data: {
+        name: createMenuItemDto.name,
+        price: createMenuItemDto.price,
+        description:
+          createMenuItemDto.description,
+        isAvailable:
+          createMenuItemDto.isAvailable ?? true,
+        categoryId:
+          createMenuItemDto.categoryId,
+        restaurantId,
+      },
       include: {
         category: true,
       },
     });
   }
 
-  updateItem(id: number, updateMenuItemDto: UpdateMenuItemDto) {
+  findItemsByRestaurant(
+    restaurantId: number,
+  ) {
+    return this.prisma.menuItem.findMany({
+      where: {
+        restaurantId,
+      },
+      orderBy: {
+        id: 'asc',
+      },
+      include: {
+        category: true,
+      },
+    });
+  }
+
+  async updateItem(
+    id: number,
+    updateMenuItemDto: UpdateMenuItemDto,
+    restaurantId: number,
+  ) {
+    const menuItem =
+      await this.prisma.menuItem.findFirst({
+        where: {
+          id,
+          restaurantId,
+        },
+      });
+
+    if (!menuItem) {
+      throw new NotFoundException(
+        'Menü ürünü bulunamadı.',
+      );
+    }
+
+    if (
+      updateMenuItemDto.categoryId !== undefined
+    ) {
+      const category =
+        await this.prisma.menuCategory.findFirst({
+          where: {
+            id: updateMenuItemDto.categoryId,
+            restaurantId,
+          },
+        });
+
+      if (!category) {
+        throw new BadRequestException(
+          'Seçilen kategori bu restorana ait değil.',
+        );
+      }
+    }
+
     return this.prisma.menuItem.update({
-      where: { id },
+      where: {
+        id,
+      },
       data: updateMenuItemDto,
+      include: {
+        category: true,
+      },
     });
   }
 
-   deleteItem(id: number) {
+  async deleteItem(
+    id: number,
+    restaurantId: number,
+  ) {
+    const menuItem =
+      await this.prisma.menuItem.findFirst({
+        where: {
+          id,
+          restaurantId,
+        },
+      });
+
+    if (!menuItem) {
+      throw new NotFoundException(
+        'Menü ürünü bulunamadı.',
+      );
+    }
+
     return this.prisma.menuItem.delete({
-      where: { id },
+      where: {
+        id,
+      },
     });
   }
 
-  findMenuByRestaurant(restaurantId: number) {
+  findMenuByRestaurant(
+    restaurantId: number,
+  ) {
     return this.prisma.menuCategory.findMany({
       where: {
         restaurantId,
       },
+      orderBy: {
+        id: 'asc',
+      },
       include: {
-        menuItems: true,
+        menuItems: {
+          where: {
+            isAvailable: true,
+          },
+          orderBy: {
+            id: 'asc',
+          },
+        },
       },
     });
   }
-  }
+}
