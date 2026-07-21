@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PaymentService } from './payment.service';
+import { ProcessIyzicoPaymentDto } from './dto/process-iyzico-payment.dto';
 
 @Controller('payment')
 export class PaymentController {
@@ -21,6 +22,15 @@ export class PaymentController {
   ) {
     return this.paymentService.create(createPaymentDto);
   }
+
+  @Post('iyzico')
+processIyzicoPayment(
+  @Body() processPaymentDto: ProcessIyzicoPaymentDto,
+) {
+  return this.paymentService.processIyzicoPayment(
+    processPaymentDto,
+  );
+}
 
   @Patch(':id/complete')
   complete(

@@ -16,7 +16,7 @@ import { AiModule } from './ai/ai.module';
 import { AdminModule } from './admin/admin.module';
 
 @Module({
-  imports: [RestaurantsModule, PrismaModule, UsersModule, AuthModule, MenuModule, TablesModule, OrdersModule, PaymentModule, ServiceRequestModule,DashboardModule,AiModule,AdminModule,],
+imports: [RestaurantsModule, PrismaModule, UsersModule, AuthModule, MenuModule, TablesModule, OrdersModule, PaymentModule, ServiceRequestModule, DashboardModule, AiModule, AdminModule],
   controllers: [AppController],
   providers: [AppService, KitchenGateway],
 })
