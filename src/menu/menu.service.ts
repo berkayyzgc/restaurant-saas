@@ -147,30 +147,25 @@ export class MenuService {
     });
   }
 
-  async deleteItem(
-    id: number,
-    restaurantId: number,
-  ) {
-    const menuItem =
-      await this.prisma.menuItem.findFirst({
-        where: {
-          id,
-          restaurantId,
-        },
-      });
+  async deleteItem(id: number, restaurantId: number) {
+  const item = await this.prisma.menuItem.findFirst({
+    where: {
+      id,
+      restaurantId,
+    },
+  });
 
-    if (!menuItem) {
-      throw new NotFoundException(
-        'Menü ürünü bulunamadı.',
-      );
-    }
-
-    return this.prisma.menuItem.delete({
-      where: {
-        id,
-      },
-    });
+  if (!item) {
+    throw new NotFoundException('Ürün bulunamadı.');
   }
+
+  return this.prisma.menuItem.update({
+    where: { id },
+    data: {
+      isAvailable: false,
+    },
+  });
+}
 
   findMenuByRestaurant(
     restaurantId: number,
