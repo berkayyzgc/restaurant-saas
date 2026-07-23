@@ -11,9 +11,13 @@ app.enableCors({
     'http://localhost:5174',
     'http://localhost:5175',
     'http://localhost:5176',
+    'http://10.118.233.83:5173',
+    'http://10.118.233.83:5174',
+    'http://10.118.233.83:5175',
+    'http://10.118.233.83:5176',
   ],
   credentials: true,
-});
+})
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -34,6 +38,6 @@ app.enableCors({
 
   SwaggerModule.setup('api', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3000, '0.0.0.0')
 }
 bootstrap();

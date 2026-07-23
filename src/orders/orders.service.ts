@@ -320,13 +320,14 @@ export class OrdersService {
           status: 'OPEN',
         },
         status: {
-          in: [
-            OrderStatus.PENDING,
-            OrderStatus.ACCEPTED,
-            OrderStatus.PREPARING,
-            OrderStatus.READY,
-          ],
-        },
+  in: [
+    OrderStatus.PENDING,
+    OrderStatus.ACCEPTED,
+    OrderStatus.PREPARING,
+    OrderStatus.READY,
+    OrderStatus.SERVED,
+  ],
+},
       },
       include: {
         tableSession: {
