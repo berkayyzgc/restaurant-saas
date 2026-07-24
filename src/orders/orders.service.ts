@@ -348,6 +348,66 @@ export class OrdersService {
     });
   }
 
+  async findTableSessionOrders(tableId: number) {
+  const table = await this.prisma.table.findUnique({
+    where: {
+      id: tableId,
+    },
+  });
+
+  if (!table) {
+    throw new NotFoundException('Masa bulunamadı');
+  }
+
+  const tableSession =
+    await this.prisma.tableSession.findFirst({
+      where: {
+        tableId,
+        status: 'OPEN',
+      },
+      orderBy: {
+        openedAt: 'desc',
+      },
+    });
+
+  if (!tableSession) {
+    return [];
+  }
+
+  return this.prisma.order.findMany({
+    where: {
+      tableSessionId: tableSession.id,
+    },
+    select: {
+      id: true,
+      tableSessionId: true,
+      status: true,
+      note: true,
+      totalPrice: true,
+      createdAt: true,
+      updatedAt: true,
+      acceptedAt: true,
+      preparingAt: true,
+      readyAt: true,
+      servedAt: true,
+      cancelledAt: true,
+      items: {
+        select: {
+          id: true,
+          menuItemId: true,
+          itemName: true,
+          quantity: true,
+          unitPrice: true,
+          note: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
+
   async getTableBillSummary(tableId: number) {
   const table = await this.prisma.table.findUnique({
     where: {

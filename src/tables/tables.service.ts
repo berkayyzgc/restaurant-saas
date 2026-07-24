@@ -7,12 +7,14 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
+import { KitchenGateway } from '../kitchen/kitchen.gateway';
 
 @Injectable()
 export class TablesService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+ constructor(
+  private readonly prisma: PrismaService,
+  private readonly kitchenGateway: KitchenGateway,
+) {}
 
   create(
     createTableDto: CreateTableDto,
@@ -30,32 +32,33 @@ export class TablesService {
   async findAll(
     restaurantId: number,
   ) {
-    const tables = await this.prisma.table.findMany({
-      where: {
-        restaurantId,
-      },
-      orderBy: {
-        id: 'asc',
-      },
-      include: {
-        tableSessions: {
-          where: {
-            status: 'OPEN',
-          },
-          orderBy: {
-            openedAt: 'desc',
-          },
-          take: 1,
-          include: {
-            orders: {
-              orderBy: {
-                createdAt: 'desc',
+    const tables =
+      await this.prisma.table.findMany({
+        where: {
+          restaurantId,
+        },
+        orderBy: {
+          id: 'asc',
+        },
+        include: {
+          tableSessions: {
+            where: {
+              status: 'OPEN',
+            },
+            orderBy: {
+              openedAt: 'desc',
+            },
+            take: 1,
+            include: {
+              orders: {
+                orderBy: {
+                  createdAt: 'desc',
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
     return tables.map((table) => {
       const activeSession =
@@ -201,6 +204,28 @@ export class TablesService {
     return table;
   }
 
+  async closeSessionByQrToken(
+    qrToken: string,
+  ) {
+    const table =
+      await this.prisma.table.findUnique({
+        where: {
+          qrToken,
+        },
+      });
+
+    if (!table) {
+      throw new NotFoundException(
+        'QR koduna ait masa bulunamadı',
+      );
+    }
+
+    return this.closeSession(
+      table.id,
+      table.restaurantId,
+    );
+  }
+
   async closeSession(
     tableId: number,
     restaurantId: number,
@@ -237,7 +262,8 @@ export class TablesService {
       );
     }
 
-    return this.prisma.tableSession.update({
+    const closedSession =
+  await this.prisma.tableSession.update({
       where: {
         id: tableSession.id,
       },
@@ -255,5 +281,13 @@ export class TablesService {
         },
       },
     });
+  this.kitchenGateway.sendTableUpdated({
+  tableId,
+  restaurantId,
+  operationalStatus: 'AVAILABLE',
+})
+
+return closedSession
   }
 }
+

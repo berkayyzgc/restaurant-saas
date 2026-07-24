@@ -63,6 +63,13 @@ export class TablesController {
     return this.tablesService.findByQrToken(token);
   }
 
+  @Patch('qr/:token/close-session')
+closeSessionByQrToken(
+  @Param('token') token: string,
+) {
+  return this.tablesService.closeSessionByQrToken(token);
+}
+
   @Patch(':id/close-session')
   @UseGuards(JwtAuthGuard)
   closeSession(

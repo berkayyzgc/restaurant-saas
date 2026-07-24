@@ -30,6 +30,13 @@ findActiveOrderByTable(@Param('tableId') tableId: string) {
   return this.ordersService.findActiveOrderByTable(+tableId);
 }
 
+@Get('table/:tableId/history')
+findTableSessionOrders(
+  @Param('tableId') tableId: string,
+) {
+  return this.ordersService.findTableSessionOrders(+tableId);
+}
+
 @Get('table/:tableId/bill-summary')
 getTableBillSummary(@Param('tableId') tableId: string) {
   return this.ordersService.getTableBillSummary(+tableId);
