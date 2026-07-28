@@ -13,10 +13,25 @@ import { PaymentModule } from './payment/payment.module';
 import { ServiceRequestModule } from './service-request/service-request.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AiModule } from './ai/ai.module';
+import { BusinessAiModule } from './business-ai/business-ai.module';
 import { AdminModule } from './admin/admin.module';
 
 @Module({
-imports: [RestaurantsModule, PrismaModule, UsersModule, AuthModule, MenuModule, TablesModule, OrdersModule, PaymentModule, ServiceRequestModule, DashboardModule, AiModule, AdminModule],
+  imports: [
+    RestaurantsModule,
+    PrismaModule,
+    UsersModule,
+    AuthModule,
+    MenuModule,
+    TablesModule,
+    OrdersModule,
+    PaymentModule,
+    ServiceRequestModule,
+    DashboardModule,
+    AiModule,
+    BusinessAiModule,
+    AdminModule,
+  ],
   controllers: [AppController],
   providers: [AppService, KitchenGateway],
 })
