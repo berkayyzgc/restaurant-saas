@@ -1,4 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+} from '@nestjs/common';
+
 import { DashboardService } from './dashboard.service';
 
 @Controller('dashboard')
@@ -12,8 +17,16 @@ export class DashboardController {
     return this.dashboardService.getSummary();
   }
 
-  @Get('reports')
-  getReports() {
-    return this.dashboardService.getReports();
-  }
+@Get('reports')
+getReports(
+  @Query('period') period = 'today',
+  @Query('startDate') startDate?: string,
+  @Query('endDate') endDate?: string,
+) {
+  return this.dashboardService.getReports(
+    period,
+    startDate,
+    endDate,
+  );
+}
 }

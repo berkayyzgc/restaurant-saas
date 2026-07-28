@@ -13,6 +13,124 @@ export class DashboardService {
     private readonly prisma: PrismaService,
   ) {}
 
+  private buildHourlyRevenue(
+  payments: Array<{
+    amount: unknown;
+    completedAt: Date | null;
+  }>,
+) {
+  
+  const hourlyRevenueMap = new Map<
+    number,
+    number
+  >();
+
+  for (
+    let hour = 0;
+    hour < 24;
+    hour += 1
+  ) {
+    hourlyRevenueMap.set(hour, 0);
+  }
+
+  payments.forEach((payment) => {
+    if (!payment.completedAt) {
+      return;
+    }
+
+    const hour =
+      new Date(
+        payment.completedAt,
+      ).getHours();
+
+    const currentRevenue =
+      hourlyRevenueMap.get(hour) ?? 0;
+
+    hourlyRevenueMap.set(
+      hour,
+      currentRevenue +
+        Number(payment.amount),
+    );
+  });
+
+  return Array.from(
+    hourlyRevenueMap.entries(),
+  ).map(([hour, revenue]) => ({
+    hour: `${String(hour).padStart(
+      2,
+      '0',
+    )}:00`,
+    revenue,
+  }));
+}
+
+private buildDailyRevenue(
+  payments: Array<{
+    amount: unknown;
+    completedAt: Date | null;
+  }>,
+  startDate: Date,
+  endDate: Date,
+) {
+  const dailyRevenueMap = new Map<
+    string,
+    number
+  >();
+
+  const currentDate = new Date(startDate);
+  currentDate.setHours(0, 0, 0, 0);
+
+  const finalDate = new Date(endDate);
+  finalDate.setHours(0, 0, 0, 0);
+
+  while (currentDate <= finalDate) {
+    const dateKey =
+      currentDate.toISOString().split('T')[0];
+
+    dailyRevenueMap.set(dateKey, 0);
+
+    currentDate.setDate(
+      currentDate.getDate() + 1,
+    );
+  }
+
+  payments.forEach((payment) => {
+    if (!payment.completedAt) {
+      return;
+    }
+
+    const paymentDate = new Date(
+      payment.completedAt,
+    );
+
+    const dateKey =
+      paymentDate.toISOString().split('T')[0];
+
+    const currentRevenue =
+      dailyRevenueMap.get(dateKey) ?? 0;
+
+    dailyRevenueMap.set(
+      dateKey,
+      currentRevenue +
+        Number(payment.amount),
+    );
+  });
+
+  return Array.from(
+    dailyRevenueMap.entries(),
+  ).map(([date, revenue]) => ({
+    date,
+    label: new Intl.DateTimeFormat(
+      'tr-TR',
+      {
+        day: '2-digit',
+        month: 'short',
+      },
+    ).format(new Date(`${date}T00:00:00`)),
+    revenue,
+  }));
+}
+
   async getSummary() {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -77,76 +195,123 @@ export class DashboardService {
     };
   }
 
-  async getReports() {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+  async getReports(
+  period = 'today',
+  startDate?: string,
+  endDate?: string,
+) {
 
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(
-      startOfTomorrow.getDate() + 1,
+  const now = new Date();
+
+let reportStartDate: Date;
+let reportEndDate: Date;
+
+switch (period) {
+  case '7d':
+    reportStartDate = new Date(now);
+    reportStartDate.setDate(
+      reportStartDate.getDate() - 6,
+    );
+    reportStartDate.setHours(0, 0, 0, 0);
+
+    reportEndDate = new Date(now);
+    reportEndDate.setHours(23, 59, 59, 999);
+    break;
+
+  case '30d':
+    reportStartDate = new Date(now);
+    reportStartDate.setDate(
+      reportStartDate.getDate() - 29,
+    );
+    reportStartDate.setHours(0, 0, 0, 0);
+
+    reportEndDate = new Date(now);
+    reportEndDate.setHours(23, 59, 59, 999);
+    break;
+
+  case 'thisMonth':
+    reportStartDate = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1,
     );
 
-    const startOfLast7Days = new Date(startOfToday);
-    startOfLast7Days.setDate(
-      startOfLast7Days.getDate() - 6,
+    reportEndDate = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
     );
+    break;
+
+  case 'lastMonth':
+    reportStartDate = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      1,
+    );
+
+    reportEndDate = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+    break;
+
+  case 'custom':
+    reportStartDate = startDate
+      ? new Date(`${startDate}T00:00:00`)
+      : new Date(now);
+
+    reportEndDate = endDate
+      ? new Date(`${endDate}T23:59:59.999`)
+      : new Date(now);
+
+    break;
+
+  case 'today':
+  default:
+    reportStartDate = new Date(now);
+    reportStartDate.setHours(0, 0, 0, 0);
+
+    reportEndDate = new Date(now);
+    reportEndDate.setHours(23, 59, 59, 999);
+    break;
+}
 
     const [
-      todayPaidOrders,
-      last7DaysPaidOrders,
       completedPayments,
       soldItems,
       paymentRecords,
     ] = await Promise.all([
-      this.prisma.order.findMany({
-        where: {
-          paymentStatus: OrderPaymentStatus.PAID,
-          paidAt: {
-            gte: startOfToday,
-            lt: startOfTomorrow,
-          },
-        },
-        select: {
-          id: true,
-          totalPrice: true,
-          paidAt: true,
-        },
-      }),
-
-      this.prisma.order.findMany({
-        where: {
-          paymentStatus: OrderPaymentStatus.PAID,
-          paidAt: {
-            gte: startOfLast7Days,
-            lt: startOfTomorrow,
-          },
-        },
-        select: {
-          totalPrice: true,
-          paidAt: true,
-        },
-      }),
 
       this.prisma.payment.count({
         where: {
           status: PaymentStatus.COMPLETED,
           completedAt: {
-            gte: startOfToday,
-            lt: startOfTomorrow,
-          },
+  gte: reportStartDate,
+  lte: reportEndDate,
+},
         },
       }),
 
       this.prisma.orderItem.findMany({
         where: {
-          order: {
-            paymentStatus: OrderPaymentStatus.PAID,
-            paidAt: {
-              gte: startOfLast7Days,
-              lt: startOfTomorrow,
-            },
-          },
-        },
+         order: {
+          paymentStatus: OrderPaymentStatus.PAID,
+           paidAt: {
+            gte: reportStartDate,
+             lte: reportEndDate,
+       },
+      },
+     },
         select: {
           itemName: true,
           quantity: true,
@@ -158,69 +323,47 @@ export class DashboardService {
         where: {
           status: PaymentStatus.COMPLETED,
           completedAt: {
-            gte: startOfLast7Days,
-            lt: startOfTomorrow,
-          },
+  gte: reportStartDate,
+  lte: reportEndDate,
+},
         },
         select: {
-          method: true,
-          amount: true,
-        },
+  method: true,
+  amount: true,
+  completedAt: true,
+},
       }),
     ]);
 
-    const todayRevenue = todayPaidOrders.reduce(
-      (total, order) =>
-        total + Number(order.totalPrice),
-      0,
-    );
+const selectedPeriodPayments =
+  paymentRecords;
 
-    const last7DaysRevenue =
-      last7DaysPaidOrders.reduce(
-        (total, order) =>
-          total + Number(order.totalPrice),
-        0,
-      );
+   const totalRevenue =
+  selectedPeriodPayments.reduce(
+    (total, payment) =>
+      total + Number(payment.amount),
+    0,
+  );
 
-    const averageOrderValue =
-      todayPaidOrders.length > 0
-        ? todayRevenue / todayPaidOrders.length
-        : 0;
+  const averagePaymentValue =
+  completedPayments > 0
+    ? totalRevenue / completedPayments
+    : 0;
 
-    const hourlyRevenueMap = new Map<
-      number,
-      number
-    >();
-
-    for (let hour = 0; hour < 24; hour += 1) {
-      hourlyRevenueMap.set(hour, 0);
-    }
-
-    todayPaidOrders.forEach((order) => {
-      if (!order.paidAt) {
-        return;
-      }
-
-      const hour = new Date(
-        order.paidAt,
-      ).getHours();
-
-      const currentRevenue =
-        hourlyRevenueMap.get(hour) ?? 0;
-
-      hourlyRevenueMap.set(
-        hour,
-        currentRevenue +
-          Number(order.totalPrice),
-      );
-    });
-
-    const hourlyRevenue = Array.from(
-      hourlyRevenueMap.entries(),
-    ).map(([hour, revenue]) => ({
-      hour: `${String(hour).padStart(2, '0')}:00`,
-      revenue,
-    }));
+  const hourlyRevenue =
+  period === 'today'
+    ? this.buildHourlyRevenue(
+        selectedPeriodPayments,
+      )
+    : this.buildDailyRevenue(
+        selectedPeriodPayments,
+        reportStartDate,
+        reportEndDate,
+      ).map((dailyRevenue) => ({
+        hour: dailyRevenue.label,
+        date: dailyRevenue.date,
+        revenue: dailyRevenue.revenue,
+      }));
 
     const productMap = new Map<
       string,
@@ -313,15 +456,17 @@ export class DashboardService {
     }));
 
     return {
-      todayRevenue,
-      last7DaysRevenue,
-      completedPayments,
-      averageOrderValue: Number(
-        averageOrderValue.toFixed(2),
-      ),
-      topSellingProducts,
-      hourlyRevenue,
-      paymentMethods,
-    };
+  period,
+  startDate: reportStartDate,
+  endDate: reportEndDate,
+  totalRevenue,
+  completedPayments,
+  averagePaymentValue: Number(
+    averagePaymentValue.toFixed(2),
+  ),
+  topSellingProducts,
+  revenueChart: hourlyRevenue,
+  paymentMethods,
+};
   }
 }
