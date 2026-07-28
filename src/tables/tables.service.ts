@@ -41,23 +41,36 @@ export class TablesService {
           id: 'asc',
         },
         include: {
-          tableSessions: {
-            where: {
-              status: 'OPEN',
-            },
-            orderBy: {
-              openedAt: 'desc',
-            },
-            take: 1,
+  tableSessions: {
+    where: {
+      status: 'OPEN',
+    },
+    orderBy: {
+      openedAt: 'desc',
+    },
+    take: 1,
+    include: {
+      orders: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          items: {
             include: {
-              orders: {
-                orderBy: {
-                  createdAt: 'desc',
+              paymentItems: {
+                where: {
+                  payment: {
+                    status: 'COMPLETED',
+                  },
                 },
               },
             },
           },
         },
+      },
+    },
+  },
+},
       });
 
     return tables.map((table) => {

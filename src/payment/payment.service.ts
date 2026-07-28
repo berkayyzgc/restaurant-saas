@@ -31,187 +31,463 @@ export class PaymentService {
 ) {}
 
   async create(createPaymentDto: CreatePaymentDto) {
-    const {
-      tableSessionId,
-      method,
-      keepSessionOpen = true,
-    } = createPaymentDto;
+  const {
+    tableSessionId,
+    method,
+    items,
+    keepSessionOpen = true,
+  } = createPaymentDto;
 
-    const tableSession =
-      await this.prisma.tableSession.findFirst({
-        where: {
-          id: tableSessionId,
-          status: 'OPEN',
+  const tableSession =
+    await this.prisma.tableSession.findFirst({
+      where: {
+        id: tableSessionId,
+        status: 'OPEN',
+      },
+      include: {
+        table: true,
+        restaurant: true,
+      },
+    });
+
+  if (!tableSession) {
+    throw new NotFoundException(
+      'Açık masa oturumu bulunamadı',
+    );
+  }
+
+  const pendingPayment =
+    await this.prisma.payment.findFirst({
+      where: {
+        tableSessionId,
+        status: PaymentStatus.PENDING,
+      },
+    });
+
+  if (pendingPayment) {
+    throw new BadRequestException(
+      'Bu masa için zaten bekleyen bir ödeme bulunuyor',
+    );
+  }
+
+  const uniqueOrderItemIds = [
+    ...new Set(items.map((item) => item.orderItemId)),
+  ];
+
+  if (uniqueOrderItemIds.length !== items.length) {
+    throw new BadRequestException(
+      'Aynı ürün ödeme listesine birden fazla kez eklenemez',
+    );
+  }
+
+  const orderItems = await this.prisma.orderItem.findMany({
+    where: {
+      id: {
+        in: uniqueOrderItemIds,
+      },
+      order: {
+        tableSessionId,
+        status: {
+          not: 'CANCELLED',
         },
+      },
+    },
+    include: {
+      order: true,
+    },
+  });
+
+  if (orderItems.length !== uniqueOrderItemIds.length) {
+    throw new BadRequestException(
+      'Seçilen ürünlerden biri bu masa oturumuna ait değil veya iptal edilmiş',
+    );
+  }
+
+  const completedQuantities =
+    await this.prisma.paymentItem.groupBy({
+      by: ['orderItemId'],
+      where: {
+        orderItemId: {
+          in: uniqueOrderItemIds,
+        },
+        payment: {
+          status: PaymentStatus.COMPLETED,
+        },
+      },
+      _sum: {
+        quantity: true,
+      },
+    });
+
+  const paidQuantityMap = new Map(
+    completedQuantities.map((item) => [
+      item.orderItemId,
+      item._sum.quantity ?? 0,
+    ]),
+  );
+
+  let amount = new Prisma.Decimal(0);
+
+  const paymentItemsData = items.map((selectedItem) => {
+    const orderItem = orderItems.find(
+      (item) => item.id === selectedItem.orderItemId,
+    );
+
+    if (!orderItem) {
+      throw new BadRequestException(
+        'Seçilen sipariş ürünü bulunamadı',
+      );
+    }
+
+    const paidQuantity =
+      paidQuantityMap.get(orderItem.id) ?? 0;
+
+    const remainingQuantity =
+      orderItem.quantity - paidQuantity;
+
+    if (remainingQuantity <= 0) {
+      throw new BadRequestException(
+        `${orderItem.itemName} ürünü zaten tamamen ödendi`,
+      );
+    }
+
+    if (selectedItem.quantity > remainingQuantity) {
+      throw new BadRequestException(
+        `${orderItem.itemName} için en fazla ${remainingQuantity} adet ödenebilir`,
+      );
+    }
+
+    const itemAmount = orderItem.unitPrice.mul(
+      selectedItem.quantity,
+    );
+
+    amount = amount.plus(itemAmount);
+
+    return {
+      orderItemId: orderItem.id,
+      quantity: selectedItem.quantity,
+      unitPrice: orderItem.unitPrice,
+      amount: itemAmount,
+    };
+  });
+
+  if (amount.lessThanOrEqualTo(0)) {
+    throw new BadRequestException(
+      'Ödeme tutarı sıfırdan büyük olmalıdır',
+    );
+  }
+
+  if (!keepSessionOpen) {
+  const sessionOrders = await this.prisma.order.findMany({
+    where: {
+      tableSessionId,
+      status: {
+        not: 'CANCELLED',
+      },
+    },
+    include: {
+      items: {
+        include: {
+          paymentItems: {
+            where: {
+              payment: {
+                status: PaymentStatus.COMPLETED,
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  let totalRemainingAmount = new Prisma.Decimal(0)
+
+  for (const order of sessionOrders) {
+    for (const orderItem of order.items) {
+      const paidQuantity = orderItem.paymentItems.reduce(
+        (total, paymentItem) =>
+          total + paymentItem.quantity,
+        0,
+      )
+
+      const remainingQuantity = Math.max(
+        orderItem.quantity - paidQuantity,
+        0,
+      )
+
+      totalRemainingAmount = totalRemainingAmount.plus(
+        orderItem.unitPrice.mul(remainingQuantity),
+      )
+    }
+  }
+
+  if (!amount.equals(totalRemainingAmount)) {
+    throw new BadRequestException(
+      'Masadan ayrılmak için kalan hesabın tamamının ödenmesi gerekiyor',
+    )
+  }
+}
+
+  return this.prisma.payment.create({
+    data: {
+      tableSessionId,
+      amount,
+      method,
+      status: PaymentStatus.PENDING,
+      keepSessionOpen,
+      items: {
+        create: paymentItemsData,
+      },
+    },
+    include: {
+      items: {
+        include: {
+          orderItem: true,
+        },
+      },
+      tableSession: {
         include: {
           table: true,
           restaurant: true,
           orders: {
-            where: {
-              paymentStatus: OrderPaymentStatus.UNPAID,
-              status: {
-                not: 'CANCELLED',
-              },
-            },
-          },
-        },
-      });
-
-    if (!tableSession) {
-      throw new NotFoundException(
-        'Açık masa oturumu bulunamadı',
-      );
-    }
-
-    if (tableSession.orders.length === 0) {
-      throw new BadRequestException(
-        'Bu masa için ödenmemiş sipariş bulunmuyor',
-      );
-    }
-
-    const pendingPayment =
-      await this.prisma.payment.findFirst({
-        where: {
-          tableSessionId,
-          status: PaymentStatus.PENDING,
-        },
-      });
-
-    if (pendingPayment) {
-      throw new BadRequestException(
-        'Bu masa için zaten bekleyen bir ödeme bulunuyor',
-      );
-    }
-
-    const amount = tableSession.orders.reduce(
-      (total, order) =>
-        total.plus(order.totalPrice),
-      new Prisma.Decimal(0),
-    );
-
-    return this.prisma.payment.create({
-      data: {
-        tableSessionId,
-        amount,
-        method,
-        status: PaymentStatus.PENDING,
-        keepSessionOpen,
-      },
-      include: {
-        tableSession: {
-          include: {
-            table: true,
-            restaurant: true,
-            orders: {
-              include: {
-                items: true,
-              },
+            include: {
+              items: true,
             },
           },
         },
       },
-    });
-  }
+    },
+  });
+}
 
   async complete(paymentId: number) {
-    const payment = await this.prisma.payment.findUnique({
-      where: {
-        id: paymentId,
-      },
-      include: {
-        tableSession: {
-          include: {
-            table: true,
-            restaurant: true,
-            orders: true,
+  const payment = await this.prisma.payment.findUnique({
+    where: {
+      id: paymentId,
+    },
+    include: {
+      items: {
+        include: {
+          orderItem: {
+            include: {
+              order: true,
+            },
           },
         },
       },
-    });
+      tableSession: {
+        include: {
+          table: true,
+          restaurant: true,
+        },
+      },
+    },
+  });
 
-    if (!payment) {
-      throw new NotFoundException(
-        'Ödeme kaydı bulunamadı',
-      );
-    }
+  if (!payment) {
+    throw new NotFoundException(
+      'Ödeme kaydı bulunamadı',
+    );
+  }
 
-    if (payment.status === PaymentStatus.COMPLETED) {
-      throw new BadRequestException(
-        'Bu ödeme zaten tamamlanmış',
-      );
-    }
+  if (payment.status === PaymentStatus.COMPLETED) {
+    throw new BadRequestException(
+      'Bu ödeme zaten tamamlanmış',
+    );
+  }
 
-    if (
-      payment.status === PaymentStatus.CANCELLED ||
-      payment.status === PaymentStatus.FAILED
-    ) {
-      throw new BadRequestException(
-        'İptal edilmiş veya başarısız ödeme tamamlanamaz',
-      );
-    }
+  if (
+    payment.status === PaymentStatus.CANCELLED ||
+    payment.status === PaymentStatus.FAILED
+  ) {
+    throw new BadRequestException(
+      'İptal edilmiş veya başarısız ödeme tamamlanamaz',
+    );
+  }
 
-    
+  if (payment.items.length === 0) {
+    throw new BadRequestException(
+      'Bu ödeme için seçilmiş ürün bulunmuyor',
+    );
+  }
 
-    const completedAt = new Date();
+  const completedAt = new Date();
 
-    return this.prisma.$transaction(
-      async (transaction) => {
-        await transaction.order.updateMany({
+  return this.prisma.$transaction(
+    async (transaction) => {
+      await transaction.payment.update({
+        where: {
+          id: paymentId,
+        },
+        data: {
+          status: PaymentStatus.COMPLETED,
+          completedAt,
+        },
+      });
+
+      const affectedOrderIds = [
+        ...new Set(
+          payment.items.map(
+            (paymentItem) =>
+              paymentItem.orderItem.orderId,
+          ),
+        ),
+      ];
+
+      const affectedOrders =
+        await transaction.order.findMany({
           where: {
-            tableSessionId: payment.tableSessionId,
-            paymentStatus: OrderPaymentStatus.UNPAID,
-            status: {
-              not: 'CANCELLED',
+            id: {
+              in: affectedOrderIds,
             },
           },
-          data: {
-            paymentStatus: OrderPaymentStatus.PAID,
-            paidAt: completedAt,
-          },
-        });
-
-        const completedPayment =
-          await transaction.payment.update({
-            where: {
-              id: paymentId,
-            },
-            data: {
-              status: PaymentStatus.COMPLETED,
-              completedAt,
-            },
-            include: {
-              tableSession: {
-                include: {
-                  table: true,
-                  restaurant: true,
-                  orders: {
-                    include: {
-                      items: true,
+          include: {
+            items: {
+              include: {
+                paymentItems: {
+                  where: {
+                    payment: {
+                      status: PaymentStatus.COMPLETED,
                     },
                   },
                 },
               },
             },
-          });
+          },
+        });
 
-        if (!payment.keepSessionOpen) {
-          await transaction.tableSession.update({
-            where: {
-              id: payment.tableSessionId,
+      for (const order of affectedOrders) {
+        const isFullyPaid = order.items.every(
+          (orderItem) => {
+            const paidQuantity =
+              orderItem.paymentItems.reduce(
+                (total, paymentItem) =>
+                  total + paymentItem.quantity,
+                0,
+              );
+
+            return paidQuantity >= orderItem.quantity;
+          },
+        );
+
+        await transaction.order.update({
+          where: {
+            id: order.id,
+          },
+          data: isFullyPaid
+            ? {
+                paymentStatus:
+                  OrderPaymentStatus.PAID,
+                paidAt: completedAt,
+              }
+            : {
+                paymentStatus:
+                  OrderPaymentStatus.UNPAID,
+                paidAt: null,
+              },
+        });
+      }
+
+      const sessionOrders =
+        await transaction.order.findMany({
+          where: {
+            tableSessionId: payment.tableSessionId,
+            status: {
+              not: 'CANCELLED',
             },
-            data: {
-              status: 'CLOSED',
-              closedAt: completedAt,
+          },
+          include: {
+            items: {
+              include: {
+                paymentItems: {
+                  where: {
+                    payment: {
+                      status: PaymentStatus.COMPLETED,
+                    },
+                  },
+                },
+              },
             },
-          });
-        }
+          },
+        });
 
-        this.kitchenGateway.sendPaymentCompleted(completedPayment);
+      const allSessionItemsPaid =
+        sessionOrders.length > 0 &&
+        sessionOrders.every((order) =>
+          order.items.every((orderItem) => {
+            const paidQuantity =
+              orderItem.paymentItems.reduce(
+                (total, paymentItem) =>
+                  total + paymentItem.quantity,
+                0,
+              );
 
-return completedPayment;
-      },
-    );
-  }
+            return paidQuantity >= orderItem.quantity;
+          }),
+        );
+
+      if (
+        !payment.keepSessionOpen &&
+        allSessionItemsPaid
+      ) {
+        await transaction.tableSession.update({
+          where: {
+            id: payment.tableSessionId,
+          },
+          data: {
+            status: 'CLOSED',
+            closedAt: completedAt,
+          },
+        });
+      }
+
+      const completedPayment =
+        await transaction.payment.findUnique({
+          where: {
+            id: paymentId,
+          },
+          include: {
+            items: {
+              include: {
+                orderItem: true,
+              },
+            },
+            tableSession: {
+              include: {
+                table: true,
+                restaurant: true,
+                orders: {
+                  include: {
+                    items: {
+                      include: {
+                        paymentItems: {
+                          include: {
+                            payment: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      if (!completedPayment) {
+        throw new NotFoundException(
+          'Tamamlanan ödeme bulunamadı',
+        );
+      }
+
+      this.kitchenGateway.sendPaymentCompleted(
+        completedPayment,
+      );
+
+      return completedPayment;
+    },
+  );
+}
 
   async processIyzicoPayment(
   processPaymentDto: ProcessIyzicoPaymentDto,
@@ -230,7 +506,12 @@ return completedPayment;
       id: paymentId,
     },
     include: {
-      tableSession: {
+  items: {
+    include: {
+      orderItem: true,
+    },
+  },
+  tableSession: {
         include: {
           table: true,
           restaurant: true,
@@ -331,15 +612,13 @@ return completedPayment;
         'Test restoran adresi',
     },
 
-    basketItems: [
-      {
-        id: `PAYMENT-${payment.id}`,
-        name: `${payment.tableSession.table.name} hesabı`,
-        category1: 'Restaurant',
-        itemType: Iyzipay.BASKET_ITEM_TYPE.PHYSICAL,
-        price: amount,
-      },
-    ],
+    basketItems: payment.items.map((paymentItem) => ({
+  id: `ORDER-ITEM-${paymentItem.orderItemId}`,
+  name: `${paymentItem.orderItem.itemName} x${paymentItem.quantity}`,
+  category1: 'Restaurant',
+  itemType: Iyzipay.BASKET_ITEM_TYPE.PHYSICAL,
+  price: paymentItem.amount.toFixed(2),
+})),
   };
 
   const iyzicoResult = await new Promise<any>(
@@ -402,6 +681,7 @@ console.log('===========================');
       );
     }
 
+
     if (payment.status === PaymentStatus.COMPLETED) {
       throw new BadRequestException(
         'Tamamlanmış ödeme iptal edilemez',
@@ -420,8 +700,13 @@ console.log('===========================');
 
   findAll() {
     return this.prisma.payment.findMany({
+  include: {
+    items: {
       include: {
-        tableSession: {
+        orderItem: true,
+      },
+    },
+    tableSession: {
           include: {
             table: true,
             restaurant: true,
@@ -445,7 +730,12 @@ console.log('===========================');
         id,
       },
       include: {
-        tableSession: {
+  items: {
+    include: {
+      orderItem: true,
+    },
+  },
+  tableSession: {
           include: {
             table: true,
             restaurant: true,
@@ -463,8 +753,16 @@ console.log('===========================');
       throw new NotFoundException(
         'Ödeme kaydı bulunamadı',
       );
-    }
+}
+      if (payment.items.length === 0) {
+  throw new BadRequestException(
+    'Ödeme için seçilmiş ürün bulunamadı',
+  );
+}
 
+    
+
+    
     return payment;
   }
 }

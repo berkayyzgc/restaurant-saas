@@ -382,6 +382,8 @@ export class OrdersService {
       id: true,
       tableSessionId: true,
       status: true,
+      paymentStatus: true,
+paidAt: true,
       note: true,
       totalPrice: true,
       createdAt: true,
@@ -391,17 +393,28 @@ export class OrdersService {
       readyAt: true,
       servedAt: true,
       cancelledAt: true,
-      items: {
-        select: {
-          id: true,
-          menuItemId: true,
-          itemName: true,
-          quantity: true,
-          unitPrice: true,
-          note: true,
+ items: {
+  select: {
+    id: true,
+    menuItemId: true,
+    itemName: true,
+    quantity: true,
+    unitPrice: true,
+    note: true,
+
+    paymentItems: {
+      where: {
+        payment: {
+          status: 'COMPLETED',
         },
       },
+      select: {
+        quantity: true,
+      },
     },
+  },
+},
+},
     orderBy: {
       createdAt: 'desc',
     },

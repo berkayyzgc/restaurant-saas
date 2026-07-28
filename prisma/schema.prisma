@@ -162,8 +162,9 @@ model OrderItem {
   note       String?
   createdAt  DateTime @default(now())
 
-  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem     MenuItem      @relation(fields: [menuItemId], references: [id])
+  paymentItems PaymentItem[]
 }
 
 model Payment {
@@ -179,6 +180,22 @@ model Payment {
   updatedAt         DateTime      @updatedAt
 
   tableSession TableSession @relation(fields: [tableSessionId], references: [id])
+  items        PaymentItem[]
+}
+
+model PaymentItem {
+  id          Int      @id @default(autoincrement())
+  paymentId   Int
+  orderItemId Int
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  amount      Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  payment   Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentId, orderItemId])
 }
 
 model ServiceRequest {
