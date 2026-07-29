@@ -195,10 +195,103 @@ private buildDailyRevenue(
     };
   }
 
-  async getReports(
+  async getComparisonReport(
+  restaurantId: number,
+) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  const formatLocalDate = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(
+      date.getMonth() + 1,
+    ).padStart(2, '0')
+    const day = String(
+      date.getDate(),
+    ).padStart(2, '0')
+
+    return `${year}-${month}-${day}`
+  }
+
+  const todayDate = formatLocalDate(today)
+  const yesterdayDate =
+    formatLocalDate(yesterday)
+
+  const [
+    todayReport,
+    yesterdayReport,
+  ] = await Promise.all([
+    this.getReports(
+      'custom',
+      todayDate,
+      todayDate,
+      restaurantId,
+    ),
+    this.getReports(
+      'custom',
+      yesterdayDate,
+      yesterdayDate,
+      restaurantId,
+    ),
+  ])
+
+  const revenueDifference =
+    todayReport.totalRevenue -
+    yesterdayReport.totalRevenue
+
+  const revenueChangePercentage =
+    yesterdayReport.totalRevenue > 0
+      ? Number(
+          (
+            (revenueDifference /
+              yesterdayReport.totalRevenue) *
+            100
+          ).toFixed(2),
+        )
+      : todayReport.totalRevenue > 0
+        ? 100
+        : 0
+
+  return {
+    today: {
+      totalRevenue:
+        todayReport.totalRevenue,
+      completedPayments:
+        todayReport.completedPayments,
+      averagePaymentValue:
+        todayReport.averagePaymentValue,
+      topSellingProduct:
+        todayReport.topSellingProducts[0] ??
+        null,
+    },
+    yesterday: {
+      totalRevenue:
+        yesterdayReport.totalRevenue,
+      completedPayments:
+        yesterdayReport.completedPayments,
+      averagePaymentValue:
+        yesterdayReport.averagePaymentValue,
+      topSellingProduct:
+        yesterdayReport
+          .topSellingProducts[0] ?? null,
+    },
+    comparison: {
+      revenueDifference,
+      revenueChangePercentage,
+      paymentDifference:
+        todayReport.completedPayments -
+        yesterdayReport.completedPayments,
+    },
+  }
+}
+async getReports(
   period = 'today',
   startDate?: string,
   endDate?: string,
+  restaurantId?: number,
 ) {
 
   const now = new Date();
@@ -294,6 +387,11 @@ switch (period) {
 
       this.prisma.payment.count({
         where: {
+  ...(restaurantId && {
+    tableSession: {
+      restaurantId,
+    },
+  }),
           status: PaymentStatus.COMPLETED,
           completedAt: {
   gte: reportStartDate,
@@ -304,7 +402,10 @@ switch (period) {
 
       this.prisma.orderItem.findMany({
         where: {
-         order: {
+  order: {
+    tableSession: {
+      restaurantId: restaurantId,
+    },
           paymentStatus: OrderPaymentStatus.PAID,
            paidAt: {
             gte: reportStartDate,
@@ -320,7 +421,12 @@ switch (period) {
       }),
 
       this.prisma.payment.findMany({
-        where: {
+       where: {
+  ...(restaurantId && {
+    tableSession: {
+      restaurantId,
+    },
+  }),
           status: PaymentStatus.COMPLETED,
           completedAt: {
   gte: reportStartDate,
