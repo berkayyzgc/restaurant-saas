@@ -64,6 +64,18 @@ export class DashboardService {
   }));
 }
 
+private formatLocalDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(
+    date.getMonth() + 1,
+  ).padStart(2, '0')
+  const day = String(
+    date.getDate(),
+  ).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
 private buildDailyRevenue(
   payments: Array<{
     amount: unknown;
@@ -85,7 +97,7 @@ private buildDailyRevenue(
 
   while (currentDate <= finalDate) {
     const dateKey =
-      currentDate.toISOString().split('T')[0];
+    this.formatLocalDate(currentDate)
 
     dailyRevenueMap.set(dateKey, 0);
 
@@ -104,7 +116,7 @@ private buildDailyRevenue(
     );
 
     const dateKey =
-      paymentDate.toISOString().split('T')[0];
+         this.formatLocalDate(paymentDate)
 
     const currentRevenue =
       dailyRevenueMap.get(dateKey) ?? 0;
@@ -131,7 +143,7 @@ private buildDailyRevenue(
   }));
 }
 
-  async getSummary() {
+  async getSummary(restaurantId?: number) {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
@@ -147,42 +159,60 @@ private buildDailyRevenue(
       preparingOrders,
     ] = await Promise.all([
       this.prisma.order.aggregate({
-        where: {
-          paymentStatus: OrderPaymentStatus.PAID,
-          paidAt: {
-            gte: startOfToday,
-            lt: startOfTomorrow,
-          },
-        },
+  where: {
+    ...(restaurantId && {
+      tableSession: {
+        restaurantId,
+      },
+    }),
+    paymentStatus: OrderPaymentStatus.PAID,
+    paidAt: {
+      gte: startOfToday,
+      lt: startOfTomorrow,
+    },
+  },
         _sum: {
           totalPrice: true,
         },
       }),
 
-      this.prisma.order.count({
-        where: {
-          status: {
-            in: [
-              OrderStatus.PENDING,
-              OrderStatus.ACCEPTED,
-              OrderStatus.PREPARING,
-              OrderStatus.READY,
-            ],
-          },
-        },
-      }),
+     this.prisma.order.count({
+  where: {
+    ...(restaurantId && {
+      tableSession: {
+        restaurantId,
+      },
+    }),
+    status: {
+      in: [
+        OrderStatus.PENDING,
+        OrderStatus.ACCEPTED,
+        OrderStatus.PREPARING,
+        OrderStatus.READY,
+      ],
+    },
+  },
+}),
 
       this.prisma.tableSession.count({
-        where: {
-          status: TableSessionStatus.OPEN,
+         where: {
+       ...(restaurantId && {
+        restaurantId,
+      }),
+       status: TableSessionStatus.OPEN,
         },
       }),
 
-      this.prisma.order.count({
-        where: {
-          status: OrderStatus.PREPARING,
-        },
-      }),
+     this.prisma.order.count({
+  where: {
+    ...(restaurantId && {
+      tableSession: {
+        restaurantId,
+      },
+    }),
+    status: OrderStatus.PREPARING,
+  },
+}),
     ]);
 
     return {
@@ -204,21 +234,11 @@ private buildDailyRevenue(
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
 
-  const formatLocalDate = (date: Date) => {
-    const year = date.getFullYear()
-    const month = String(
-      date.getMonth() + 1,
-    ).padStart(2, '0')
-    const day = String(
-      date.getDate(),
-    ).padStart(2, '0')
+ const todayDate =
+  this.formatLocalDate(today)
 
-    return `${year}-${month}-${day}`
-  }
-
-  const todayDate = formatLocalDate(today)
-  const yesterdayDate =
-    formatLocalDate(yesterday)
+const yesterdayDate =
+  this.formatLocalDate(yesterday)
 
   const [
     todayReport,
@@ -404,7 +424,7 @@ switch (period) {
         where: {
   order: {
     tableSession: {
-      restaurantId: restaurantId,
+      restaurantId,
     },
           paymentStatus: OrderPaymentStatus.PAID,
            paidAt: {

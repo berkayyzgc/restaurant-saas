@@ -1,5 +1,6 @@
 import { DashboardService } from '../dashboard/dashboard.service';
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -28,15 +29,30 @@ export class BusinessAiService {
     });
   }
 
-  async chat(
-    message: string,
-    restaurantId: number,
-  ) {
+ async chat(
+  message: string,
+  restaurantId: number,
+  userId: number,
+) {
+
+if (!message?.trim()) {
+  throw new BadRequestException(
+    'Mesaj boş olamaz.',
+  );
+}
+
+if (message.trim().length > 1000) {
+  throw new BadRequestException(
+    'Mesaj en fazla 1000 karakter olabilir.',
+  );
+}
+
     const restaurant =
-      await this.prisma.restaurant.findUnique({
-        where: {
-          id: restaurantId,
-        },
+  await this.prisma.restaurant.findFirst({
+    where: {
+      id: restaurantId,
+      userId,
+    },
         select: {
           id: true,
           name: true,
@@ -51,18 +67,18 @@ export class BusinessAiService {
       );
     }
 
-const reports =
-  await this.dashboardService.getReports(
-    'today',
-    undefined,
-    undefined,
-    restaurantId,
-  );
-
-  const comparison =
-  await this.dashboardService.getComparisonReport(
-    restaurantId,
-  );
+const [reports, comparison] =
+  await Promise.all([
+    this.dashboardService.getReports(
+      'today',
+      undefined,
+      undefined,
+      restaurantId,
+    ),
+    this.dashboardService.getComparisonReport(
+      restaurantId,
+    ),
+  ]);
 
   const formatCurrency = (value: number) =>
   value.toLocaleString('tr-TR', {
